@@ -1,8 +1,10 @@
+from django.contrib.auth.forms import UserCreationForm
 from django.contrib.auth.models import User
 from django.db import models
 from django.db.models import Sum
 from django.db.models.functions import Coalesce
 from django.urls import reverse
+from django import forms
 
 
 class Author(models.Model):
@@ -21,11 +23,14 @@ class Author(models.Model):
     def __str__(self):
         return self.user.username
 
+    def get_absolute_url(self):
+        return reverse('profile_edit', args=[str(self.id)])
+
 class Category(models.Model):
-    category_name = models.CharField(max_length=255, unique=True)
+    name = models.CharField(max_length=255, unique=True)
 
     def __str__(self):
-        return self.category_name
+        return self.name
 
 
 class Post(models.Model):
@@ -40,7 +45,7 @@ class Post(models.Model):
     rating = models.IntegerField(default=0)
     creation_date = models.DateTimeField(auto_now_add=True)
     type = models.CharField(max_length=2, choices=CONTENTS, default=news)
-    author = models.ForeignKey(Author, on_delete=models.CASCADE, related_name='posts')
+    author = models.ForeignKey(Author, on_delete=models.CASCADE)
     category = models.ManyToManyField(Category, through='PostCategory')
 
     def like_post(self):
@@ -53,10 +58,13 @@ class Post(models.Model):
 
     def preview(self):
         return self.text[0:124] + "..."
+
     def __str__(self):
         return f'{self.title}'
+
     def get_absolute_url(self):
         return reverse('post_detail', args=[str(self.id)])
+
 
 class PostCategory(models.Model):
     post = models.ForeignKey(Post, on_delete=models.CASCADE)
@@ -77,3 +85,18 @@ class Comment(models.Model):
     def dislike_comment(self):
         self.rating -= 1
         self.save()
+
+
+class BaseRegisterForm(UserCreationForm):
+    email = forms.EmailField(label="Email")
+    first_name = forms.CharField(label="Имя")
+    last_name = forms.CharField(label="Фамилия")
+
+    class Meta:
+        model = User
+        fields = ("username",
+                  "first_name",
+                  "last_name",
+                  "email",
+                  "password1",
+                  "password2",)
