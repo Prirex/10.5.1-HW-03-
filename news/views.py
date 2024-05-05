@@ -3,13 +3,15 @@ from django.contrib.auth.mixins import LoginRequiredMixin, PermissionRequiredMix
 from django.contrib.auth.models import User, Group
 from django.http import request
 from django.urls import reverse_lazy
+from django.utils import timezone
 from django.views.generic import ListView, DetailView, CreateView, UpdateView, DeleteView, TemplateView
 from django_filters.views import FilterView
-from django.shortcuts import render, redirect
+from django.shortcuts import render, redirect, get_object_or_404
 from .forms import PostForm, ProfileForm
-from .models import Post, BaseRegisterForm, Author
+from .models import Post, BaseRegisterForm, Author, Category
 from .filters import PostFilter
-
+import datetime
+from datetime import date
 
 class PostList(ListView):
     model = Post
@@ -70,11 +72,13 @@ class PostCreate(PermissionRequiredMixin, CreateView):
             post.type = 'NE'
         else:
             post.type = 'AR'
-        post.author = self.request.user.author
+        form.instance.author = self.request.user.author
+        today = timezone.now()
+        limit = today - timezone.timedelta(days=1)
+        if len(Post.objects.filter(author=post.author, creation_date__gte=limit)) >= 3:
+            return render(self.request, 'cancel_posting.html', {'author': post.author})
         post.save()
-
         return super().form_valid(form)
-
 
 class PostUpdate(PermissionRequiredMixin, UpdateView):
     permission_required = 'news.change_post'
@@ -120,4 +124,31 @@ def upgrade_me(request):
     if not request.user.groups.filter(name='authors').exists():
         authors_group.user_set.add(user)
         Author.objects.create(user=user)
-    return redirect('/profile/')  # или /news/irect('/profile/')  # или /news/
+    return redirect('/profile/')
+
+
+class CategoryListView(ListView):
+    model = Post
+    template_name = 'news/category_list.html'
+    context_object_name = 'category_news_list'
+
+    def get_queryset(self):
+        self.category = get_object_or_404(Category, id=self.kwargs['pk'])
+        queryset = Post.objects.filter(category=self.category).order_by('-creation_date')  # or 'created_at'
+        return queryset
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['is_not_subscriber'] = self.request.user not in self.category.subscribers.all()
+        context['category'] = self.category
+        return context
+
+
+@login_required
+def subscribe(request, pk):
+    user = request.user
+    category = Category.objects.get(id=pk)
+    category.subscribers.add(user)
+
+    message = 'Вы успешно подписались на рассылку новостей категории'
+    return render(request, 'news/subscribe.html', {'category': category, 'message': message})
