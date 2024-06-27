@@ -1,6 +1,7 @@
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.mixins import LoginRequiredMixin, PermissionRequiredMixin
 from django.contrib.auth.models import User, Group
+from django.core.cache import cache
 from django.http import request
 from django.urls import reverse_lazy
 from django.utils import timezone
@@ -10,8 +11,10 @@ from django.shortcuts import render, redirect, get_object_or_404
 from .forms import PostForm, ProfileForm
 from .models import Post, BaseRegisterForm, Author, Category
 from .filters import PostFilter
-import datetime
-from datetime import date
+# from .tasks import inform_about_new_post # celery option
+# from .tasks import weekly_mailing
+# import datetime
+# from datetime import date
 
 class PostList(ListView):
     model = Post
@@ -35,7 +38,17 @@ class PostDetail(DetailView):
     model = Post
     template_name = 'post.html'
     context_object_name = 'post'
+    queryset = Post.objects.all()
     pk_url_kwarg = 'id'
+
+    def get_object(self, *args, **kwargs):
+        obj = cache.get(f'post-{self.kwargs["id"]}', None)
+
+        if not obj:
+            obj = super().get_object(queryset=self.queryset)
+            cache.set(f'post-{self.kwargs["id"]}', obj)
+
+        return obj
 
 
 class PostSearch(FilterView):
@@ -110,10 +123,17 @@ class IndexView(LoginRequiredMixin, TemplateView):
         return context
 
 
-class ProfileUpdate(LoginRequiredMixin, UpdateView):
-    template_name = 'profile_edit.html'
+
+class ProfileUpdate(UpdateView):
+    permission_required = 'news.change_author'
     form_class = ProfileForm
-    model = Author
+    model = User
+    pk_url_kwarg = 'pk'
+    template_name = 'profile_edit.html'
+    def form_valid(self, form):
+        if form.is_valid():
+            form.save()
+        return super().form_valid(form)
     success_url = reverse_lazy('post_list')
 
 
