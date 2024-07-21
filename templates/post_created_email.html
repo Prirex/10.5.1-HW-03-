@@ -2,10 +2,11 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Уведомление</title>
+    <title>Notice</title>
 </head>
 <body>
-    <h2>Здравствуйте, {{ username }}! Вышла новая <a href="{{ link }}">статья</a> в Вашем любимом разделе!</h2> <br>
-    <p>{{ text }}</p>
+    <h2>Dear <a href="http://127.0.0.1:8000/post/">AdBoard</a> subscriber! A new <a href="{{ link }}">post</a> has been added in your favorite category!</h2> <br>
+    <p>{{ title }}</p>
+    <p>{{ text|safe }}</p>
 </body>
 </html>
